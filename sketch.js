@@ -44,15 +44,17 @@ let currentColorScheme = {
 // Wall jump tracking
 let canWallJump = true;
 
-// Zoom and fade transition variables
-let isZooming = false;
-let zoomLevel = 1;
+// Fade effect variables
 let fadeAlpha = 0;
-let transitionPhase = 'none'; // 'none', 'zoom', 'fadeIn', 'fadeOut'
-let originalCameraX = 0;
-let originalCameraY = 0;
-let targetCameraX = 0;
-let targetCameraY = 0;
+let isFading = false;
+let fadeDirection = 1; // 1 for fade in, -1 for fade out
+let fadeSpeed = 10.0; // 3 times faster than before (2.0 * 3 = 6.0)
+
+// Camera zoom variables
+let baseZoom = 1.0;
+let currentZoom = 1.0;
+let targetZoom = 1.0;
+let zoomSpeed = 0.1;
 
 function setup() {
   createCanvas(600, 400);
@@ -78,36 +80,36 @@ function draw() {
     text('Play', width/2, height/2);
     return;
   }
-  
-  // Update zoom transition
-  updateZoomTransition();
-  
   // --- Game loop ---
-  // Update camera to follow player (only when not in transition)
-  if (transitionPhase === 'none') {
-    cameraX = player.x - width/2;
-    cameraY = player.y - height/2;
-    
-    // Clamp camera to world bounds
-    cameraX = constrain(cameraX, 0, worldWidth - width);
-    cameraY = constrain(cameraY, 0, worldHeight - height);
-  } else if (transitionPhase === 'zoom') {
-    // Interpolate camera position during zoom
-    let progress = (zoomLevel - 1) / 1; // 1 to 2 zoom range
-    cameraX = lerp(originalCameraX, targetCameraX, progress);
-    cameraY = lerp(originalCameraY, targetCameraY, progress);
+  // Update camera to follow player
+  cameraX = player.x - width/2;
+  cameraY = player.y - height/2;
+  
+  // Clamp camera to world bounds
+  cameraX = constrain(cameraX, 0, worldWidth - width);
+  cameraY = constrain(cameraY, 0, worldHeight - height);
+  
+  // Handle zoom effect during fade
+  if (isFading) {
+    if (fadeDirection === 1) {
+      // Zoom in during fade in
+      targetZoom = 2.0;
+    } else {
+      // Zoom out during fade out
+      targetZoom = 1.0;
+    }
+  } else {
+    targetZoom = 1.0;
   }
   
-  // Apply camera transform
+  // Smooth zoom transition
+  currentZoom = lerp(currentZoom, targetZoom, zoomSpeed);
+  
+  // Apply camera transform with zoom
   push();
-  translate(-cameraX, -cameraY);
-  
-  // Apply zoom effect
-  if (transitionPhase !== 'none') {
-    translate(player.x, player.y);
-    scale(zoomLevel);
-    translate(-player.x, -player.y);
-  }
+  translate(width/2, height/2);
+  scale(currentZoom);
+  translate(-cameraX - width/2, -cameraY - height/2);
   
   // Draw world
   for (let plat of platforms) plat.show();
@@ -116,12 +118,6 @@ function draw() {
   
   pop();
 
-  // Draw fade overlay
-  if (fadeAlpha > 0) {
-    fill(255, fadeAlpha);
-    rect(0, 0, width, height);
-  }
-
   // Draw distance number only
   fill(255);
   textSize(24);
@@ -129,13 +125,37 @@ function draw() {
   let floorY = worldHeight - 20; // y of the floor
   let distance = max(0, floorY - (player.y + player.h));
   text(nf(distance, 1, 0), width/2, 10);
+  
+  // Handle fade effect
+  if (isFading) {
+    fadeAlpha += fadeDirection * fadeSpeed;
+    
+    if (fadeDirection === 1 && fadeAlpha >= 255) {
+      // Fade in complete, start fade out
+      fadeAlpha = 255;
+      fadeDirection = -1;
+      // Randomize terrain here
+      randomizeTerrain();
+    } else if (fadeDirection === -1 && fadeAlpha <= 0) {
+      // Fade out complete
+      fadeAlpha = 0;
+      isFading = false;
+    }
+    
+    // Draw white fade overlay
+    fill(255, fadeAlpha);
+    rect(0, 0, width, height);
+  }
 }
 
 function keyPressed() {
   keys[keyCode] = true;
   if (keyCode === 32) { // Space
-    if (transitionPhase === 'none') {
-      startZoomTransition();
+    if (!isFading) {
+      // Start fade effect
+      isFading = true;
+      fadeAlpha = 0;
+      fadeDirection = 1;
     }
   }
   if ((keyCode === UP_ARROW || keyCode === 87) && player.onGround) {
@@ -160,45 +180,6 @@ function keyReleased() {
   // Reset wall jump ability when up arrow is released
   if (keyCode === UP_ARROW || keyCode === 87) {
     canWallJump = true;
-  }
-}
-
-function startZoomTransition() {
-  transitionPhase = 'zoom';
-  originalCameraX = cameraX;
-  originalCameraY = cameraY;
-  targetCameraX = player.x - width/2;
-  targetCameraY = player.y - height/2;
-  zoomLevel = 1;
-  fadeAlpha = 0;
-}
-
-function updateZoomTransition() {
-  if (transitionPhase === 'zoom') {
-    // Zoom in on player and fade to white simultaneously - 5x slower
-    zoomLevel += 0.04; // Reduced from 0.2 to 0.04 (5x slower)
-    fadeAlpha += 0.4; // Reduced from 2.0 to 0.4 (5x slower)
-    if (zoomLevel >= 2) {
-      transitionPhase = 'fadeOut';
-      zoomLevel = 2;
-      fadeAlpha = 255; // Ensure full white
-      // Randomize terrain during the white screen
-      randomizeTerrain();
-    }
-  } else if (transitionPhase === 'fadeOut') {
-    // Fade out with new layout - 3x faster
-    fadeAlpha -= 1.2; // Increased from 0.4 to 1.2 (3x faster)
-    if (fadeAlpha <= 0) {
-      transitionPhase = 'zoomOut';
-      fadeAlpha = 0;
-    }
-  } else if (transitionPhase === 'zoomOut') {
-    // Slowly zoom out to normal FOV
-    zoomLevel -= 0.04; // Same speed as zoom in
-    if (zoomLevel <= 1) {
-      transitionPhase = 'none';
-      zoomLevel = 1;
-    }
   }
 }
 

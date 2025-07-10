@@ -146,4 +146,4 @@ class Player {
     fill(128);
     rect(this.x, this.y, this.w, this.h, 6);
   }
-}
+ }
