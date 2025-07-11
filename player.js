@@ -8,7 +8,81 @@ class Player {
     this.vy = 0;
     this.onGround = false;
     this.onWall = false;
+    this.particles = []; // Array to store particle trail
+    this.lastX = x; // Track previous position for movement detection
+    this.lastY = y;
+    this.groundTimer = 0; // Timer for ground particle activation
+    this.wallTimer = 0; // Timer for wall particle activation
   }
+  
+  // Add particle to trail
+  addParticle(x, y, color) {
+    this.particles.push({
+      x: x,
+      y: y,
+      vx: random(-1, 1),
+      vy: random(-0.5, -0.1),
+      life: 30,
+      maxLife: 30,
+      color: color,
+      isWallParticle: false
+    });
+  }
+  
+  // Add wall sliding particle
+  addWallParticle(x, y, color) {
+    this.particles.push({
+      x: x,
+      y: y,
+      vx: random(-0.5, 0.5),
+      vy: 0,
+      life: 20,
+      maxLife: 20,
+      color: color,
+      isWallParticle: true
+    });
+  }
+  
+  // Update particles
+  updateParticles() {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      let p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      
+      p.life--;
+      
+      // Remove dead particles
+      if (p.life <= 0) {
+        this.particles.splice(i, 1);
+      }
+    }
+  }
+  
+  // Draw ground particles (behind player)
+  drawGroundParticles() {
+    for (let p of this.particles) {
+      if (!p.isWallParticle) {
+        let alpha = map(p.life, 0, p.maxLife, 0, 127);
+        fill(p.color[0], p.color[1], p.color[2], alpha);
+        noStroke();
+        rect(p.x - 3, p.y - 3, 6, 6);
+      }
+    }
+  }
+  
+  // Draw wall particles (in front of player)
+  drawWallParticles() {
+    for (let p of this.particles) {
+      if (p.isWallParticle) {
+        let alpha = map(p.life, 0, p.maxLife, 0, 127);
+        fill(p.color[0], p.color[1], p.color[2], alpha);
+        noStroke();
+        rect(p.x - 3, p.y - 3, 6, 6);
+      }
+    }
+  }
+  
   update() {
     // Horizontal movement
     if(this.onGround==true){
@@ -98,7 +172,49 @@ class Player {
     // Keep player in world bounds
     this.x = constrain(this.x, 0, worldWidth - this.w);
     this.y = constrain(this.y, 0, worldHeight - this.h);
+    
+    // Update timers
+    if (this.onGround) {
+      this.groundTimer++;
+    } else {
+      this.groundTimer = 0;
+    }
+    
+    if (this.onWall) {
+      this.wallTimer++;
+    } else {
+      this.wallTimer = 0;
+    }
+    
+    // Generate particles when moving on ground (after 6 frames = ~0.10 seconds at 60fps)
+    if (this.onGround && currentPlatform && this.groundTimer > 6) {
+      let moved = abs(this.x - this.lastX) > 0.1 || abs(this.y - this.lastY) > 0.1;
+      if (moved && random() < 0.5) { // 50% chance to generate particle
+        // Add particles very close to the ground
+        let particleX = this.x + this.w/2 + random(-3, 3);
+        let particleY = this.y + this.h - 1;
+        this.addParticle(particleX, particleY, currentColorScheme.platform);
+      }
+    }
+    
+    // Generate wall sliding particles (after 6 frames = ~0.10 seconds at 60fps)
+    if (this.onWall && currentWallPlatform && this.vy > 0 && this.wallTimer > 6) {
+      if (random() < 0.5) { // 50% chance to generate particle
+        // Add wall particles slightly lower when sliding down
+        let particleX = this.x + (this.vx > 0 ? this.w : 0) + random(-3, 3);
+        let particleY = this.y - 2 + random(-3, 3);
+        this.addWallParticle(particleX, particleY, currentColorScheme.platform);
+      }
+    }
+    
+    // Update particles
+    this.updateParticles();
+    
+    // Update last position
+    this.lastX = this.x;
+    this.lastY = this.y;
   }
+  
   collide(axis) {
     this.onGround = false;
     currentPlatform = null;
@@ -142,8 +258,16 @@ class Player {
       }
     }
   }
+  
   show() {
+    // Draw ground particles first (behind player)
+    this.drawGroundParticles();
+    
+    // Draw player
     fill(128);
     rect(this.x, this.y, this.w, this.h, 6);
+    
+    // Draw wall particles after player (in front)
+    this.drawWallParticles();
   }
  }

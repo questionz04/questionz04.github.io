@@ -17,8 +17,8 @@ let numVeryLargePlatforms = 3; // New very large platforms
 // Camera and world dimensions
 let cameraX = 0;
 let cameraY = 0;
-let worldWidth = 1200; // 3 screens wide (600 * 3)
-let worldHeight = 8000; // 10 screens tall (400 * 10)
+let worldWidth = 8000; // 3 screens wide (600 * 3)
+let worldHeight = 12000; // 10 screens tall (400 * 10)
 
 // Track current platform
 let currentPlatform = null;
@@ -61,7 +61,7 @@ function setup() {
   playButton.x = width / 2 - playButton.w / 2;
   playButton.y = height / 2 - playButton.h / 2;
   randomizeTerrain();
-  player = new Player(width/2, worldHeight - 100);
+  player = new Player(worldWidth/2, worldHeight - 100);
 }
 
 function draw() {
